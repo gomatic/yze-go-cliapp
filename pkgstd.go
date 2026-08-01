@@ -53,26 +53,6 @@ func run(pass *analysis.Pass) (any, error) {
 	return nil, nil
 }
 
-// isScaffoldingPackage reports whether pass is a driver-synthesized test
-// package rather than a real package: an external test package (clause
-// "<pkg>_test") or the test-main package (import path "<pkg>.test").
-func isScaffoldingPackage(pass *analysis.Pass) bool {
-	return strings.HasSuffix(pass.Pkg.Name(), "_test") || strings.HasSuffix(pass.Pkg.Path(), ".test")
-}
-
-// importPath is the import path of an analyzed package.
-type importPath string
-
-// isCommandPackage reports whether a package path is a command package: the
-// direct child of internal/app/commands, i.e. exactly one path segment follows
-// the marker. Deeper descendants (e.g. a helper nested beneath a command, such
-// as .../commands/greet/internal/render) are not command packages and carry
-// none of the per-package obligations.
-func isCommandPackage(pkgPath importPath) bool {
-	_, cmd, found := strings.Cut(string(pkgPath), "/internal/app/commands/")
-	return found && cmd != "" && !strings.Contains(cmd, "/")
-}
-
 // checkConstFirst reports when the command file's first non-import declaration
 // is not a const block. The command file (the first one defining a command
 // entry point) is the canonical metadata file, so the check targets it rather
