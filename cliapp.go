@@ -171,7 +171,7 @@ func checkSingleVerb(pass *analysis.Pass, commands []*ast.FuncDecl) {
 // checkDomainAlias reports domain imports not aliased as "domain" — in
 // PRODUCTION files only. A test file may alias the domain import to
 // disambiguate (greetdomain) without violating the command package's shape,
-// exactly as test files are excluded from the entry-point scan.
+// for the same reason test files are excluded from the entry-point scan.
 func checkDomainAlias(pass *analysis.Pass) {
 	for _, file := range pass.Files {
 		if isTestFile(pass, file) {
