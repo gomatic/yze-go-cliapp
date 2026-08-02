@@ -1,4 +1,4 @@
-module github.com/gomatic/yze-go-pkgstd
+module github.com/gomatic/yze-go-cliapp
 
 go 1.26.4
 

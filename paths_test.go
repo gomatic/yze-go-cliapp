@@ -1,4 +1,4 @@
-package pkgstd
+package cliapp
 
 // White-box tests for the package-classification rules. They decide WHETHER a
 // package is judged at all, so a false positive imposes command-package
@@ -13,14 +13,12 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// TestIsCommandPackageMatchesExactlyOneSegmentBelowTheMarker names
-// isCommandPackage's claim. "Exactly one path segment follows the marker" is
-// the whole rule: a helper nested beneath a command
-// (.../commands/greet/internal/render) is ordinary code and carries none of the
-// per-package obligations, while the command package itself carries all of
-// them. Matching a prefix instead would impose an entry-point requirement on
-// every helper; matching too narrowly would exempt the command.
-func TestIsCommandPackageMatchesExactlyOneSegmentBelowTheMarker(t *testing.T) {
+// TestIsCommandTreeMatchesAnyDepthBelowTheMarker names isCommandTree's claim.
+// Every package beneath internal/app/commands is in scope AT ANY DEPTH — the
+// depth-1 predicate this replaces made `app tenant create` invisible to every
+// check. Depth is not the command/helper discriminator; the declaration gate in
+// run is, so a nested helper passing this predicate is still exempt.
+func TestIsCommandTreeMatchesAnyDepthBelowTheMarker(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
@@ -28,11 +26,11 @@ func TestIsCommandPackageMatchesExactlyOneSegmentBelowTheMarker(t *testing.T) {
 		why  string
 		want bool
 	}{
-		{path: "m/internal/app/commands/greet", want: true, why: "exactly one segment below the marker"},
+		{path: "m/internal/app/commands/greet", want: true, why: "one segment below the marker"},
 		{path: "example.com/x/internal/app/commands/serve", want: true, why: "the module prefix is irrelevant"},
+		{path: "m/internal/app/commands/tenant/create", want: true, why: "a nested command is in scope"},
+		{path: "m/internal/app/commands/greet/internal/render", want: true, why: "a nested helper is in scope here; the declaration gate exempts it"},
 
-		{path: "m/internal/app/commands/greet/internal/render", want: false, why: "a nested helper is not a command"},
-		{path: "m/internal/app/commands/greet/sub", want: false, why: "any deeper segment disqualifies"},
 		{path: "m/internal/app/commands", want: false, why: "the marker directory itself holds no command"},
 		{path: "m/internal/app/commands/", want: false, why: "an empty segment names no command"},
 		{path: "m/internal/app/command/greet", want: false, why: "the marker is 'commands', not 'command'"},
@@ -40,17 +38,15 @@ func TestIsCommandPackageMatchesExactlyOneSegmentBelowTheMarker(t *testing.T) {
 		{path: "m/pkg/greet", want: false, why: "an unrelated package"},
 		{path: "", want: false, why: "an empty path"},
 	} {
-		assert.Equal(t, tc.want, isCommandPackage(tc.path), "isCommandPackage(%q): %s", tc.path, tc.why)
+		assert.Equal(t, tc.want, isCommandTree(tc.path), "isCommandTree(%q): %s", tc.path, tc.why)
 	}
 }
 
 // TestIsScaffoldingPackageSkipsTheDriverSynthesizedPasses names the guard run
 // depends on. The analysis driver synthesizes an external test package and a
 // test-main package for any package that has tests, and NEITHER carries the
-// command source — so each would trip the missing-entry-point check and report
-// a violation against a package that does not exist on disk. Skipping them is
-// also what guarantees pass.Files is non-empty, which is why checkCommandFunc
-// may index it without a bounds check.
+// command source — so each would be misjudged against a package that does not
+// exist on disk.
 func TestIsScaffoldingPackageSkipsTheDriverSynthesizedPasses(t *testing.T) {
 	t.Parallel()
 
@@ -76,14 +72,10 @@ func passWith(name, path string) *analysis.Pass {
 	return &analysis.Pass{Pkg: types.NewPackage(path, name)}
 }
 
-// TestRunJudgesOnlyRealCommandPackages names run's guard, which is three
-// conditions doing three different jobs. Skipping the driver-synthesized
-// scaffolding stops the analyzer reporting a missing entry point against a
-// package that exists only in the driver; skipping non-command packages keeps
-// per-command obligations off ordinary code; and the len(pass.Files) == 0 test
-// is what lets checkCommandFunc index pass.Files without a bounds check — a
-// test-only directory whose sole files are external tests yields an empty pass,
-// and indexing it would panic inside the linter.
+// TestRunJudgesOnlyRealCommandPackages names run's guard: the
+// driver-synthesized scaffolding is skipped, packages outside the command tree
+// are skipped, and an empty file list is skipped rather than scanned — each
+// without error and without a report.
 func TestRunJudgesOnlyRealCommandPackages(t *testing.T) {
 	t.Parallel()
 
@@ -94,7 +86,6 @@ func TestRunJudgesOnlyRealCommandPackages(t *testing.T) {
 	}{
 		{name: "greet_test", path: "m/internal/app/commands/greet", why: "an external test package carries no command source"},
 		{name: "main", path: "m/internal/app/commands/greet.test", why: "the test-main package carries none either"},
-		{name: "render", path: "m/internal/app/commands/greet/internal/render", why: "a nested helper is not a command"},
 		{name: "widget", path: "m/pkg/widget", why: "an unrelated package"},
 	} {
 		pass := passWith(tc.name, tc.path)
@@ -104,10 +95,9 @@ func TestRunJudgesOnlyRealCommandPackages(t *testing.T) {
 		assert.NoError(t, err, "%s: %s", tc.path, tc.why)
 	}
 
-	// A real command package with no files must also be skipped rather than
-	// indexed — this is the bounds guard, and reaching it is the only way to
-	// know it holds.
+	// A command-tree package with no files must also be skipped rather than
+	// scanned — reaching the guard is the only way to know it holds.
 	assert.NotPanics(t, func() {
 		_, _ = run(passWith("greet", "m/internal/app/commands/greet"))
-	}, "an empty file list must be skipped, not indexed")
+	}, "an empty file list must be skipped, not scanned")
 }

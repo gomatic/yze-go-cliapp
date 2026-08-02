@@ -4,8 +4,7 @@ import "testing"
 
 // TestCommand produces the in-package test variant (command.go plus a _test.go
 // file) and matches the exported *Command entry-point shape. The analyzer must
-// skip _test.go files when locating the command file, so this test function is
-// never mistaken for the entry point: the variant pass reports the same
-// missing-Command diagnostic as the primary pass — anchored at command.go — and
-// the driver collapses the two onto the single `want` there.
+// skip _test.go files when collecting entry points, so this test function is
+// never mistaken for one — mistaking it would mark this helper package as
+// self-declaring and impose command obligations it does not carry.
 func TestCommand(t *testing.T) { _ = t }

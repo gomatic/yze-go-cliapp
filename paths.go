@@ -1,4 +1,4 @@
-package pkgstd
+package cliapp
 
 import (
 	"strings"
@@ -14,14 +14,15 @@ import (
 // importPath is the import path of an analyzed package.
 type importPath string
 
-// isCommandPackage reports whether a package path is a command package: the
-// direct child of internal/app/commands, i.e. exactly one path segment follows
-// the marker. Deeper descendants (e.g. a helper nested beneath a command, such
-// as .../commands/greet/internal/render) are not command packages and carry
-// none of the per-package obligations.
-func isCommandPackage(pkgPath importPath) bool {
+// isCommandTree reports whether a package path lies beneath internal/app/commands
+// — at ANY depth, so a nested command like .../commands/tenant/create is in
+// scope. Depth is not the discriminator between a command and a helper: whether
+// the package declares a command entry point is (see run), so a helper nested
+// beneath a command (.../commands/greet/internal/render) passes this predicate
+// and is exempted by the declaration gate instead.
+func isCommandTree(pkgPath importPath) bool {
 	_, cmd, found := strings.Cut(string(pkgPath), "/internal/app/commands/")
-	return found && cmd != "" && !strings.Contains(cmd, "/")
+	return found && cmd != ""
 }
 
 // isScaffoldingPackage reports whether pass is a driver-synthesized test

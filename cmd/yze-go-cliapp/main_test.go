@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis"
 
-	pkgstd "github.com/gomatic/yze-go-pkgstd"
+	cliapp "github.com/gomatic/yze-go-cliapp"
 )
 
 func TestMainRunsTheAnalyzer(t *testing.T) {
@@ -20,5 +20,5 @@ func TestMainRunsTheAnalyzer(t *testing.T) {
 	main()
 
 	require.NotNil(t, got)
-	assert.Same(t, pkgstd.Analyzer, got)
+	assert.Same(t, cliapp.Analyzer, got)
 }
