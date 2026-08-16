@@ -1,6 +1,7 @@
 package cliapp_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,6 +39,7 @@ func TestCommandPackageStandards(t *testing.T) {
 		"m/internal/app/commands/helper",
 		"m/internal/app/commands/midname",
 		"m/internal/app/commands/method",
+		"m/internal/app/commands/naming",
 		"m/internal/app/commands/forged",
 		"m/internal/app/commands/dotimport",
 		"m/myinternal/app/commands/lookalike",
@@ -57,6 +59,12 @@ func TestRegistrationIsWellFormed(t *testing.T) {
 // two effects at once: the const-first diagnostic is anchored in the TEST file
 // (where it makes no sense), and a helper package is marked self-declaring —
 // imposing command obligations it does not carry.
+//
+// A test file is one whose name ENDS in _test.go, which is the go tool's own
+// rule and therefore the only one that answers "does the build run this". A
+// substring test answers a different question and gets a different answer:
+// helpers_test.golden.go is ordinary compiled source that contains "_test.go",
+// and a diagnostic there is not a violation of anything this asserts.
 func TestCollectCommandsNeverReadsTestFiles(t *testing.T) {
 	results := analysistest.Run(t, analysistest.TestData(), cliapp.Analyzer, "m/...")
 	require.NotEmpty(t, results)
@@ -64,7 +72,7 @@ func TestCollectCommandsNeverReadsTestFiles(t *testing.T) {
 	for _, r := range results {
 		for _, d := range r.Diagnostics {
 			position := r.Pass.Fset.Position(d.Pos)
-			assert.NotContains(t, position.Filename, "_test.go",
+			assert.False(t, strings.HasSuffix(position.Filename, "_test.go"),
 				"a command-package diagnostic must never be anchored in a test file: %s", position)
 		}
 	}
