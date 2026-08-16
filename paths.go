@@ -1,18 +1,27 @@
 package cliapp
 
-import (
-	"strings"
+import "strings"
 
-	"golang.org/x/tools/go/analysis"
-)
+// Deciding which packages this analyzer judges, and which imports the alias
+// rule judges. Everything here answers "is this in scope", never "is it
+// correct" — a mistake in scope silently exempts a real command from every
+// check that follows, and a green gate then asserts a standard nothing
+// measured. Every predicate below therefore matches on whole path SEGMENTS: a
+// substring match makes internal/domainhelpers a domain package and
+// myinternal/app/commands a command tree, and neither mistake reports
+// anything, so neither is visible in a diff of findings.
 
-// Deciding which packages this analyzer judges. Everything here answers
-// "is this package in scope", never "is it correct" — a mistake in scope
-// silently exempts a real command from every check that follows, and a green
-// gate then asserts a standard nothing measured.
+// commandsMarker is the path segment run below which a package may be a
+// command package.
+const commandsMarker = "/internal/app/commands/"
 
-// importPath is the import path of an analyzed package.
+// importPath is the import path of an analyzed package or of one of its imports.
 type importPath string
+
+// packageName is the name a package's files declare in their package clause.
+// It is the verb a command package answers to, which is why the entry point's
+// own verb is compared against it (see isPackageVerb).
+type packageName string
 
 // isCommandTree reports whether a package path lies beneath internal/app/commands
 // — at ANY depth, so a nested command like .../commands/tenant/create is in
@@ -21,13 +30,6 @@ type importPath string
 // beneath a command (.../commands/greet/internal/render) passes this predicate
 // and is exempted by the declaration gate instead.
 func isCommandTree(pkgPath importPath) bool {
-	_, cmd, found := strings.Cut(string(pkgPath), "/internal/app/commands/")
+	_, cmd, found := strings.Cut(string(pkgPath), commandsMarker)
 	return found && cmd != ""
-}
-
-// isScaffoldingPackage reports whether pass is a driver-synthesized test
-// package rather than a real package: an external test package (clause
-// "<pkg>_test") or the test-main package (import path "<pkg>.test").
-func isScaffoldingPackage(pass *analysis.Pass) bool {
-	return strings.HasSuffix(pass.Pkg.Name(), "_test") || strings.HasSuffix(pass.Pkg.Path(), ".test")
 }

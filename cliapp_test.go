@@ -26,6 +26,21 @@ func TestCommandPackageStandards(t *testing.T) {
 		"m/internal/app/commands/tenant",
 		"m/internal/app/commands/tenant/create",
 		"m/internal/app/commands/tenant/badnested",
+		"m/internal/app/commands/config",
+		"m/internal/app/commands/mismatch",
+		"m/internal/app/commands/dup",
+		"m/internal/app/commands/blank",
+		"m/internal/app/commands/nested",
+		"m/internal/app/commands/nestedbad",
+		"m/internal/app/commands/flatdomain",
+		"m/internal/app/commands/lookalike",
+		"m/internal/app/commands/unaliased",
+		"m/internal/app/commands/helper",
+		"m/internal/app/commands/midname",
+		"m/internal/app/commands/method",
+		"m/internal/app/commands/forged",
+		"m/internal/app/commands/dotimport",
+		"m/myinternal/app/commands/lookalike",
 	)
 }
 
