@@ -7,6 +7,7 @@ package cliapp
 
 import (
 	"go/ast"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -41,6 +42,32 @@ func isDomainImport(path importPath) bool {
 	return found && (rest == "" || strings.HasPrefix(rest, "/"))
 }
 
+// isDomainTierRoot reports whether an import path names the tier itself rather
+// than a group beneath it. The root is the shared vocabulary package and so is
+// nobody's domain counterpart, which is why the collision exemption refuses to
+// let it stand in for one. TestDomainImportIsMatchedOnSegments pins the
+// boundary it reads.
+func isDomainTierRoot(path importPath) bool {
+	_, rest, found := strings.Cut(string(path), domainMarker)
+	return found && rest == ""
+}
+
+// importedPath is the path an import spec names. ImportSpec.Path is a quoted
+// STRING LITERAL, and Go admits the raw form as readily as the interpreted one,
+// so the quotes come off through strconv.Unquote rather than by trimming the
+// double quote — trimming leaves a backquoted path carrying its backquotes and
+// silently outside every match here, which is a domain import turned off by one
+// keystroke. A literal Unquote rejects is one the go parser rejected first, so
+// it reaches no compiled package; it yields the empty path, which no predicate
+// here matches. TestImportedPathReadsBothStringForms pins both forms.
+func importedPath(imp *ast.ImportSpec) importPath {
+	path, err := strconv.Unquote(imp.Path.Value)
+	if err != nil {
+		return ""
+	}
+	return importPath(path)
+}
+
 // checkDomainAlias reports domain imports not aliased "domain" — in PRODUCTION
 // files only. A test file may alias the domain import to disambiguate
 // (greetdomain) because it names packages the command file does not; the shape
@@ -55,31 +82,53 @@ func checkDomainAlias(pass *analysis.Pass) {
 }
 
 // checkFileDomainAliases judges one file's domain-tier imports. "domain" is a
-// FILE-scoped name, so the judgement is per file: once one import in the file
-// binds it, no other import can, and asking a second one to take it prescribes
-// a redeclaration. That exemption is not a judgement about which package
-// deserves the alias — forging it means importing a real domain package under
-// the alias the rule wants, which is the property, not a marker for it.
+// FILE-scoped name, so telling an import to take it when another import in the
+// same file already has it prescribes a redeclaration, and the file stops
+// compiling — measured by building the remedy, not by reading the spec. The shape that exemption exists for is one file naming a
+// domain group AND a type package nested beneath it, so that is what it is
+// keyed on: the holder of the alias is a STRICT PATH PREFIX of the import it
+// excuses, and is not the tier root.
+//
+// Both narrowings were bought by a forgery an earlier draft admitted. Requiring
+// only "some domain-tier import binds domain" let a file silence its own
+// misaliased group by importing the tier root as "domain" — the root is nobody's
+// counterpart — or by importing the SAME path twice, once as "domain" and once
+// under the wrong name, leaving every call site untouched. Two lines, total
+// silence, and the property acquired was none.
+//
+// What remains forgeable is stated rather than claimed away: for a group nested
+// under another group, importing the PARENT group as "domain" and using it does
+// excuse the child. It costs a real import of a real ancestor domain package,
+// which is closer to the property than to a marker for it, and no shorter than
+// aliasing the child correctly.
 func checkFileDomainAliases(pass *analysis.Pass, file *ast.File) {
 	imports := domainImports(file)
 	for _, imp := range imports {
-		if aliasedDomain(imp) {
-			return
-		}
-	}
-	for _, imp := range imports {
-		if isBlankImport(imp) {
+		if isBlankImport(imp) || aliasedDomain(imp) || excusedByAncestor(imports, imp) {
 			continue
 		}
 		pass.Reportf(imp.Pos(), "command package: import the domain package with the \"domain\" alias")
 	}
 }
 
+// excusedByAncestor reports whether another import in the same file holds the
+// "domain" alias for a group this one is nested beneath.
+func excusedByAncestor(imports []*ast.ImportSpec, imp *ast.ImportSpec) bool {
+	path := importedPath(imp)
+	for _, other := range imports {
+		holder := importedPath(other)
+		if aliasedDomain(other) && !isDomainTierRoot(holder) && strings.HasPrefix(string(path), string(holder)+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // domainImports collects one file's imports at or beneath the domain tier.
 func domainImports(file *ast.File) []*ast.ImportSpec {
 	var found []*ast.ImportSpec
 	for _, imp := range file.Imports {
-		if isDomainImport(importPath(strings.Trim(imp.Path.Value, `"`))) {
+		if isDomainImport(importedPath(imp)) {
 			found = append(found, imp)
 		}
 	}

@@ -8,6 +8,7 @@ package cliapp
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestVerbIsThePackageName(t *testing.T) {
 	for _, tc := range []struct {
 		fn   string
 		pkg  packageName
-		verb string
+		verb commandVerb
 		why  string
 		want bool
 	}{
@@ -104,6 +105,65 @@ func TestVerbIsThePackageName(t *testing.T) {
 
 		assert.Equal(t, tc.verb, verbOf(fn, tc.pkg), "verbOf(%s, %s): %s", tc.fn, tc.pkg, tc.why)
 		assert.Equal(t, tc.want, isPackageVerb(fn, tc.pkg), "isPackageVerb(%s, %s): %s", tc.fn, tc.pkg, tc.why)
+	}
+}
+
+// TestKeywordVerbsAreTheOnesNoPackageCanHave names the exemption's matcher. The
+// rule is "the verb is the package name", and for a verb Go reserves there is
+// no source that satisfies it — `package import` does not parse — so an author
+// whose CLI verb is one has already spelled the package as closely as Go
+// permits and has no edit left to make. The exemption is keyed on token.Lookup
+// and not on a name that reads keyword-ish, which is what the picker fixture
+// pins from the other side.
+func TestKeywordVerbsAreTheOnesNoPackageCanHave(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		verb commandVerb
+		why  string
+		want bool
+	}{
+		{verb: "import", want: true, why: "a plausible CLI verb Go reserves"},
+		{verb: "select", want: true, why: "likewise"},
+		{verb: "go", want: true, why: "likewise, and the shortest"},
+		{verb: "type", want: true, why: "likewise"},
+		{verb: "range", want: true, why: "likewise"},
+
+		{verb: "importer", want: false, why: "a package name Go permits, and the honest spelling of the import verb"},
+		{verb: "selector", want: false, why: "resembling a keyword is not being one"},
+		{verb: "apply", want: false, why: "an ordinary verb"},
+		{verb: "", want: false, why: "no verb at all"},
+	} {
+		assert.Equal(t, tc.want, isKeywordVerb(tc.verb), "isKeywordVerb(%q): %s", tc.verb, tc.why)
+	}
+}
+
+// TestImportedPathReadsBothStringForms names what an import path IS. Go admits
+// the raw string form as readily as the interpreted one and the build treats
+// them identically, so trimming the double quote leaves a backquoted path
+// carrying its backquotes, outside every predicate here — a domain import
+// turned off by one keystroke. This is asserted against a constructed
+// ImportSpec rather than only through the rawstring fixture, because gofmt
+// rewrites a raw import path back to the interpreted form: the fixture's
+// discriminating property is one a routine format deletes, and a case with a
+// half-life is not a case.
+func TestImportedPathReadsBothStringForms(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		literal string
+		want    importPath
+		why     string
+	}{
+		{literal: `"m/internal/domain/greet"`, want: "m/internal/domain/greet", why: "the interpreted form"},
+		{literal: "`m/internal/domain/greet`", want: "m/internal/domain/greet", why: "the raw form the build accepts identically"},
+		{literal: "`m/internal/domain`", want: "m/internal/domain", why: "the raw form of the tier root, where trimming fails outright"},
+		{literal: `"m/internal/domain"`, want: "m/internal/domain", why: "the interpreted tier root"},
+		{literal: "m/unquoted", want: "", why: "a literal the go parser would have rejected first names no path"},
+	} {
+		spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: tc.literal}}
+
+		assert.Equal(t, tc.want, importedPath(spec), "importedPath(%s): %s", tc.literal, tc.why)
 	}
 }
 

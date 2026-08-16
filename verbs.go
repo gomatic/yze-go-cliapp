@@ -8,6 +8,7 @@ package cliapp
 
 import (
 	"go/ast"
+	"go/token"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -17,13 +18,17 @@ import (
 // precedes it is the verb, and an empty remainder names the package's own verb.
 const commandSuffix = "Command"
 
+// commandVerb is the CLI word a command package answers to — the thing the
+// standard says the package is named for.
+type commandVerb string
+
 // verbOf returns the verb an entry point declares: what precedes the Command
 // suffix, or the package's own name when the entry point is spelled Command.
-func verbOf(fn *ast.FuncDecl, pkg packageName) string {
+func verbOf(fn *ast.FuncDecl, pkg packageName) commandVerb {
 	if verb := strings.TrimSuffix(fn.Name.Name, commandSuffix); verb != "" {
-		return strings.ToLower(verb)
+		return commandVerb(strings.ToLower(verb))
 	}
-	return string(pkg)
+	return commandVerb(pkg)
 }
 
 // isPackageVerb reports whether an entry point's verb is the package name. The
@@ -32,7 +37,23 @@ func verbOf(fn *ast.FuncDecl, pkg packageName) string {
 // the package is named for, and reporting it would be firing where the rule's
 // own reason holds.
 func isPackageVerb(fn *ast.FuncDecl, pkg packageName) bool {
-	return strings.EqualFold(verbOf(fn, pkg), string(pkg))
+	return strings.EqualFold(string(verbOf(fn, pkg)), string(pkg))
+}
+
+// isKeywordVerb reports whether a verb is a Go keyword, and therefore a name no
+// package can have. The rule this file enforces is "the verb is the package
+// name", and the go parser rejects `package import`, so an author whose CLI
+// verb is import, select, go, type, range or map has already spelled the
+// package as closely as Go permits (importer, selector) and has no edit left to
+// make. Reporting it leaves the baseline as the remaining move, which is the
+// population docs/r01.md exists to remove.
+//
+// Forging the exemption means naming a verb one of Go's keywords, which
+// acquires the property it exempts — a verb no package can be named for —
+// rather than a marker standing for it. TestKeywordVerbsAreTheOnesNoPackageCanHave
+// pins both directions against token.Lookup.
+func isKeywordVerb(verb commandVerb) bool {
+	return token.Lookup(string(verb)).IsKeyword()
 }
 
 // residentCommand returns the entry point that legitimately stays in the
@@ -64,12 +85,14 @@ func residentCommand(commands []*ast.FuncDecl, pkg packageName) *ast.FuncDecl {
 // every entry point after the first in FILE order names whichever symbol
 // happened to sort late, which for a package holding Command and ApplyCommand
 // is Command — and moving Command into a nested package produces config/command,
-// whose verb this same rule forbids.
+// whose verb this same rule forbids. A verb no package can be named for is
+// exempt entirely; see isKeywordVerb.
 func checkVerbs(pass *analysis.Pass, pkg packageName, commands []*ast.FuncDecl) {
 	resident := residentCommand(commands, pkg)
 	for _, fn := range commands {
 		switch {
 		case fn == resident:
+		case isKeywordVerb(verbOf(fn, pkg)):
 		case isPackageVerb(fn, pkg):
 			pass.Reportf(
 				fn.Pos(),
