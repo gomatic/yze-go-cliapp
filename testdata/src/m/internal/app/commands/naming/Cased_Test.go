@@ -6,6 +6,6 @@ package naming
 // ordinary instinct of anyone who has been bitten by a case-insensitive
 // filesystem, which is what this fleet develops on.
 
-import cased "m/internal/domain/greet" // want `import the domain package with the "domain" alias`
+import cased "m/internal/domain/naming" // want `import the domain package with the "domain" alias`
 
 var casedProbe = cased.Config{Name: "cased"}

@@ -7,7 +7,7 @@
 // widening of it.
 package naming
 
-import domain "m/internal/domain/greet"
+import domain "m/internal/domain/naming"
 
 const name = "naming"
 

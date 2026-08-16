@@ -7,6 +7,6 @@ package multifile
 // coverage percentage — says the rule stopped reaching the file it exists to
 // reach.
 
-import second "m/internal/domain/greet" // want `import the domain package with the "domain" alias`
+import second "m/internal/domain/multifile" // want `import the domain package with the "domain" alias`
 
 var helperConfig = second.Config{Name: "multifile"}

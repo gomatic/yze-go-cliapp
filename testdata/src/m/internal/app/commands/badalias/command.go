@@ -1,7 +1,7 @@
 package badalias
 
 import (
-	greet "m/internal/domain/greet" // want `domain.*alias`
+	greet "m/internal/domain/badalias" // want `domain.*alias`
 )
 
 const x = 1

@@ -6,9 +6,9 @@
 // to "any exported function" marks it self-declaring and reports both.
 package helper
 
-import wrong "m/internal/domain/greet"
+import wrong "m/internal/domain"
 
-var config = wrong.Config{Name: "helper"}
+var config = wrong.Argument("helper")
 
 // Render is an ordinary exported helper.
-func Render() string { return config.Name }
+func Render() string { return string(config) }

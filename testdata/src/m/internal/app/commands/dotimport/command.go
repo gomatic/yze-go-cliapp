@@ -5,7 +5,7 @@
 // character the cheapest way to turn this rule off.
 package dotimport
 
-import . "m/internal/domain/greet" // want `import the domain package with the "domain" alias`
+import . "m/internal/domain/dotimport" // want `import the domain package with the "domain" alias`
 
 const name = "dotimport"
 

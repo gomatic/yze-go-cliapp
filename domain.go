@@ -1,9 +1,11 @@
 package cliapp
 
-// The domain import rule. Which import it judges is a scope decision, and the
-// two exemptions below are not judgements about intent at all — each is a place
-// where the remedy the diagnostic prescribes would not compile, which is the
-// one thing an author cannot answer except with a disablement.
+// The domain import rule. Which import it judges is a scope decision, and it is
+// the whole of the difficulty: "domain" is a FILE-SCOPED name and a file has
+// exactly one, so a rule that asks more than one import for it prescribes a
+// redeclaration — an instruction whose only answer is a disablement. Everything
+// here exists to make the rule ask exactly one import per file, and to make the
+// remedy compile when the name is already spoken for.
 
 import (
 	"go/ast"
@@ -17,39 +19,57 @@ import (
 // tree sits in.
 const domainMarker = "/internal/domain"
 
-// isDomainImport reports whether an import path names the domain tier itself or
-// a package beneath it. The doc comment says "the domain package" and names no
-// discriminator, so this is the one it means, and its two boundaries are stated
-// here because a mistake at either is invisible in a diff of findings.
+// domainAlias is the name the standard gives a command package's own domain
+// package, so that every call site in the app tier reads domain.Run whatever
+// verb the package answers to.
+const domainAlias = "domain"
+
+// blankName is the import name that is not a name: a blank import binds no
+// identifier to spell the alias with. A dot import is not in this company — it
+// binds every exported name of the package instead of one, which is an edit the
+// author can still make, so it is judged like any other.
+const blankName = "_"
+
+// Diagnostic messages. The second exists because the first is not always an
+// edit that compiles: where another import in the file already binds "domain",
+// aliasing this one redeclares it, and the author's only remaining moves would
+// be a baseline or a //nolint.
+const (
+	messageAlias = "command package: import the domain package with the %q alias"
+	messageTaken = "command package: %q already binds %q here, so the domain package cannot take it — rename that import first"
+)
+
+// domainPaths are the two import paths a command package may name as its own
+// domain package, both derived from the ANALYZED package's path — which is what
+// the build compiled it as, and which no judged file can rewrite.
 //
-// The match is on whole path SEGMENTS. A plain substring test is wrong in both
-// directions at once: requiring a trailing slash exempts a module whose whole
-// domain is one package at internal/domain — which the reference layout has,
-// holding the vocabulary every Run contract shares — and dropping it admits a
-// sibling internal/domainhelpers, whose alias nothing has any business
-// prescribing.
-//
-// Nothing further narrows it to the analyzed module's own tier. Deriving the
-// tier from the command package's own path reads as tighter and is not: it
-// silently exempts a command tree that is not at the module root, which is the
-// scope mistake this file exists to avoid. The narrowing would also be
-// unreachable: the go command's internal-visibility rule restricts a path
-// holding an internal segment to importers within the namespace above it, so a
-// module conjunct here has no input that reaches it, and a guard nothing can
-// reach is dead code rather than defence.
-func isDomainImport(path importPath) bool {
-	_, rest, found := strings.Cut(string(path), domainMarker)
-	return found && (rest == "" || strings.HasPrefix(rest, "/"))
+// The counterpart is the domain package that corresponds to this command,
+// segment for segment: internal/app/commands/tenant/create is backed by
+// internal/domain/tenant/create. The tier root is the fallback, and it is only
+// the domain package of a module laying its whole domain out as one package at
+// internal/domain — which the reference layout permits and which a file
+// importing no counterpart is presumed to be.
+type domainPaths struct {
+	counterpart importPath
+	tierRoot    importPath
 }
 
-// isDomainTierRoot reports whether an import path names the tier itself rather
-// than a group beneath it. The root is the shared vocabulary package and so is
-// nobody's domain counterpart, which is why the collision exemption refuses to
-// let it stand in for one. TestDomainImportIsMatchedOnSegments pins the
-// boundary it reads.
-func isDomainTierRoot(path importPath) bool {
-	_, rest, found := strings.Cut(string(path), domainMarker)
-	return found && rest == ""
+// domainPathsOf derives the two candidate paths from a command package's own
+// path. It is only called after isCommandTree, so the marker is present and the
+// remainder names a command.
+//
+// Deriving them by exact path — rather than matching every import at or beneath
+// the tier — is what bounds the rule to one import per file. It also retires a
+// whole class of boundary mistake for free: internal/domainhelpers and
+// internal/domains cannot equal either path, so no segment-matching predicate
+// is needed to keep them out, and there is no substring test left to get wrong
+// in either direction.
+func domainPathsOf(pkgPath importPath) domainPaths {
+	namespace, command, _ := strings.Cut(string(pkgPath), commandsMarker)
+	return domainPaths{
+		counterpart: importPath(namespace + domainMarker + "/" + command),
+		tierRoot:    importPath(namespace + domainMarker),
+	}
 }
 
 // importedPath is the path an import spec names. ImportSpec.Path is a quoted
@@ -68,76 +88,33 @@ func importedPath(imp *ast.ImportSpec) importPath {
 	return importPath(path)
 }
 
-// checkDomainAlias reports domain imports not aliased "domain" — in PRODUCTION
-// files only. A test file may alias the domain import to disambiguate
-// (greetdomain) because it names packages the command file does not; the shape
-// this rule judges is the command package's, and a test file carries none of
-// it. That is a different reason from the one that keeps test files out of the
-// entry-point scan, which is misclassification; the two skips share the
-// isTestFile filter and nothing else.
-func checkDomainAlias(pass *analysis.Pass) {
-	for _, file := range productionFiles(pass) {
-		checkFileDomainAliases(pass, file)
-	}
-}
-
-// checkFileDomainAliases judges one file's domain-tier imports. "domain" is a
-// FILE-scoped name, so telling an import to take it when another import in the
-// same file already has it prescribes a redeclaration, and the file stops
-// compiling — measured by building the remedy, not by reading the spec. The shape that exemption exists for is one file naming a
-// domain group AND a type package nested beneath it, so that is what it is
-// keyed on: the holder of the alias is a STRICT PATH PREFIX of the import it
-// excuses, and is not the tier root.
+// boundName is the identifier an import actually binds in its file — which is
+// what the rule is about, and what an alias is only one way to set. An import
+// with no alias binds the imported package's OWN name, so an unaliased import
+// of the tier root binds "domain" already, and every call site in the file
+// reads domain.X exactly as the standard asks. Reading the alias instead
+// reports that file for an edit whose whole content is a redundant alias.
 //
-// Both narrowings were bought by a forgery an earlier draft admitted. Requiring
-// only "some domain-tier import binds domain" let a file silence its own
-// misaliased group by importing the tier root as "domain" — the root is nobody's
-// counterpart — or by importing the SAME path twice, once as "domain" and once
-// under the wrong name, leaving every call site untouched. Two lines, total
-// silence, and the property acquired was none.
-//
-// What remains forgeable is stated rather than claimed away: for a group nested
-// under another group, importing the PARENT group as "domain" and using it does
-// excuse the child. It costs a real import of a real ancestor domain package,
-// which is closer to the property than to a marker for it, and no shorter than
-// aliasing the child correctly.
-func checkFileDomainAliases(pass *analysis.Pass, file *ast.File) {
-	imports := domainImports(file)
-	for _, imp := range imports {
-		if isBlankImport(imp) || aliasedDomain(imp) || excusedByAncestor(imports, imp) {
-			continue
-		}
-		pass.Reportf(imp.Pos(), "command package: import the domain package with the \"domain\" alias")
+// The name comes from the imported package rather than from the last path
+// segment, because those differ and only the first is what the file binds.
+// Forging it means declaring `package domain`, which acquires the property the
+// rule exists for rather than a marker standing for it.
+func boundName(pass *analysis.Pass, imp *ast.ImportSpec) string {
+	if imp.Name != nil {
+		return imp.Name.Name
 	}
-}
-
-// excusedByAncestor reports whether another import in the same file holds the
-// "domain" alias for a group this one is nested beneath.
-func excusedByAncestor(imports []*ast.ImportSpec, imp *ast.ImportSpec) bool {
 	path := importedPath(imp)
-	for _, other := range imports {
-		holder := importedPath(other)
-		if aliasedDomain(other) && !isDomainTierRoot(holder) && strings.HasPrefix(string(path), string(holder)+"/") {
-			return true
+	for _, imported := range pass.Pkg.Imports() {
+		if importPath(imported.Path()) == path {
+			return imported.Name()
 		}
 	}
-	return false
+	return ""
 }
 
-// domainImports collects one file's imports at or beneath the domain tier.
-func domainImports(file *ast.File) []*ast.ImportSpec {
-	var found []*ast.ImportSpec
-	for _, imp := range file.Imports {
-		if isDomainImport(importedPath(imp)) {
-			found = append(found, imp)
-		}
-	}
-	return found
-}
-
-// aliasedDomain reports whether an import binds the name "domain".
-func aliasedDomain(imp *ast.ImportSpec) bool {
-	return imp.Name != nil && imp.Name.Name == "domain"
+// bindsDomain reports whether an import binds the standard's name.
+func bindsDomain(pass *analysis.Pass, imp *ast.ImportSpec) bool {
+	return boundName(pass, imp) == domainAlias
 }
 
 // isBlankImport reports whether an import binds no identifier at all, which a
@@ -145,5 +122,115 @@ func aliasedDomain(imp *ast.ImportSpec) bool {
 // name in it to spell "domain" with: aliasing it leaves an import nothing uses,
 // and the file stops compiling.
 func isBlankImport(imp *ast.ImportSpec) bool {
-	return imp.Name != nil && imp.Name.Name == "_"
+	return imp.Name != nil && imp.Name.Name == blankName
+}
+
+// checkDomainAlias reports domain imports not bound to "domain" — in PRODUCTION
+// files only. A test file may alias the domain import to disambiguate
+// (greetdomain) because it names packages the command file does not; the shape
+// this rule judges is the command package's, and a test file carries none of
+// it. That is a different reason from the one that keeps test files out of the
+// entry-point scan, which is misclassification; the two skips share the
+// isTestFile filter and nothing else.
+func checkDomainAlias(pass *analysis.Pass) {
+	paths := domainPathsOf(importPath(pass.Pkg.Path()))
+	for _, file := range productionFiles(pass) {
+		checkFileDomainAliases(pass, file, paths)
+	}
+}
+
+// checkFileDomainAliases judges the ONE import a file can be asked to bind
+// "domain" to: the package's own domain counterpart, or — when the file names
+// no counterpart — the tier root, which is the whole domain of a module that
+// has only one.
+//
+// Every other import at or beneath the tier is out of the rule's reach, and
+// that is the point rather than a concession. A command file legitimately names
+// the shared vocabulary package alongside its counterpart, or a type package
+// nested under its own group; there is one "domain" to give and the counterpart
+// has it, so asking a second import for the same name is asking for source that
+// does not compile. Whether a command package should be reaching into a domain
+// group that is not its own is cross-package correspondence, which this
+// analyzer's doc comment hands to stickler/clilayout.
+//
+// The finding sits on the FIRST spec that binds a name, so that applying the
+// remedy ends the finding: reporting every spec of the path would leave a
+// second report standing after the first was answered, and the second answer
+// does not exist.
+func checkFileDomainAliases(pass *analysis.Pass, file *ast.File, paths domainPaths) {
+	specs := entitledImports(file, paths)
+	named := firstNamedImport(specs)
+	if named == nil || anyBindsDomain(pass, specs) {
+		return
+	}
+	if holder := domainHolder(pass, file); holder != nil {
+		pass.Reportf(named.Pos(), messageTaken, importedPath(holder), domainAlias)
+		return
+	}
+	pass.Reportf(named.Pos(), messageAlias, domainAlias)
+}
+
+// entitledImports returns the specs naming the package's own domain package:
+// its counterpart where the file imports it, and the tier root only where it
+// does not. The counterpart wins because it is the package the standard names;
+// the root is the domain package of a flat module and nobody's counterpart in a
+// grouped one, so letting it stand in while a counterpart is present would sell
+// silence for one import line.
+func entitledImports(file *ast.File, paths domainPaths) []*ast.ImportSpec {
+	if specs := importsOf(file, paths.counterpart); len(specs) > 0 {
+		return specs
+	}
+	return importsOf(file, paths.tierRoot)
+}
+
+// importsOf collects the specs in a file naming one exact import path. Go
+// permits the same path twice under two names, so this is a list.
+func importsOf(file *ast.File, path importPath) []*ast.ImportSpec {
+	var found []*ast.ImportSpec
+	for _, imp := range file.Imports {
+		if importedPath(imp) == path {
+			found = append(found, imp)
+		}
+	}
+	return found
+}
+
+// firstNamedImport returns the first spec that binds an identifier, or nil when
+// every spec is blank — the shape a command mounting registration side effects
+// writes, and the one where the remedy has nothing to rename.
+func firstNamedImport(specs []*ast.ImportSpec) *ast.ImportSpec {
+	for _, imp := range specs {
+		if !isBlankImport(imp) {
+			return imp
+		}
+	}
+	return nil
+}
+
+// anyBindsDomain reports whether the domain package is bound to the standard's
+// name anywhere in the file. One binding satisfies the rule's reason — the call
+// sites reading domain.X have it — so a redundant second import of the same
+// path under another name is a wart for some other rule, not an alias
+// violation, and reporting it would prescribe a redeclaration.
+func anyBindsDomain(pass *analysis.Pass, specs []*ast.ImportSpec) bool {
+	for _, imp := range specs {
+		if bindsDomain(pass, imp) {
+			return true
+		}
+	}
+	return false
+}
+
+// domainHolder returns the import already binding "domain" in this file, if
+// any. It is consulted only once the domain package is known not to be that
+// import, so what it finds is a squatter — the shared vocabulary package under
+// an unaliased import, or an unrelated package aliased "domain" — and naming it
+// is what turns an impossible instruction into two edits that both compile.
+func domainHolder(pass *analysis.Pass, file *ast.File) *ast.ImportSpec {
+	for _, imp := range file.Imports {
+		if bindsDomain(pass, imp) {
+			return imp
+		}
+	}
+	return nil
 }

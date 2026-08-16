@@ -4,6 +4,6 @@ package naming
 // build compiles it as ordinary source. Matching the substring anywhere in the
 // name rather than at its end drops it.
 
-import golden "m/internal/domain/greet" // want `import the domain package with the "domain" alias`
+import golden "m/internal/domain/naming" // want `import the domain package with the "domain" alias`
 
 var goldenProbe = golden.Config{Name: "golden"}

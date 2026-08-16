@@ -3,7 +3,7 @@ package tested
 import (
 	"testing"
 
-	greetdomain "m/internal/domain/greet"
+	greetdomain "m/internal/domain/tested"
 )
 
 // TestCommand matches the exported *Command entry-point shape. In the

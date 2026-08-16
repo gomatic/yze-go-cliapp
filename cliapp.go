@@ -5,17 +5,35 @@
 // one declaring the entry point whose verb is the package name) leads with a
 // const block, every entry point's verb IS the package name — so a second verb
 // belongs in its own nested package, as the reference layout demonstrates with
-// config/{get,list,set} — and the package's own domain package is imported
-// under the "domain" alias.
+// config/{get,list,set} — and the package's own domain package is bound to the
+// name "domain".
 //
-// The domain package is every import at or beneath an internal/domain tier,
-// matched on whole path segments — so a sibling internal/domainhelpers is not
-// the tier, and a module whose whole domain is a single package at
-// internal/domain is. Two imports beneath it are exempt, each because the
-// remedy would not compile: a blank import binds no identifier to spell
-// "domain" with, and an import in a file where another domain-tier import
-// already binds "domain" has no way to take that name — which is the ordinary
-// shape of a command naming a type package nested under its own domain group.
+// The package's own domain package is its COUNTERPART, the domain package
+// corresponding segment for segment: internal/app/commands/tenant/create is
+// backed by internal/domain/tenant/create. Where a file imports no counterpart,
+// the tier root internal/domain takes its place, which is the whole domain of a
+// module laying it out as a single package. No other import is judged: "domain"
+// is a file-scoped name and a file has exactly one, so a rule reaching a second
+// import at or beneath the tier would prescribe a redeclaration — and a command
+// file legitimately names the shared vocabulary package beside its counterpart,
+// or a type package nested under its own group.
+//
+// The name is what the import BINDS, not what it spells: an import with no
+// alias binds the imported package's own name, so an unaliased import of a
+// package named domain already reads domain.X at every call site. A blank
+// import is exempt because there is no name in it to bind. Where some other
+// import in the file already binds "domain", the diagnostic names that import
+// instead of prescribing a redeclaration — the domain package cannot take a
+// name that is spoken for, and the remedy is to rename the holder first.
+//
+// What that leaves reachable is stated rather than claimed away: a command
+// package that imports NEITHER its counterpart NOR the tier root is judged by
+// nothing here, so moving a command's logic to a domain package that is not its
+// counterpart escapes the rule. It is not a marker anyone can forge — the
+// candidate paths come from the analyzed package's own import path, which no
+// judged file can rewrite — and the escape costs relocating a package, against
+// an alias that costs one word. Whether such a command exists at all is
+// cross-package correspondence, which is stickler/clilayout's.
 //
 // Test files are judged by none of this. They carry no command source, and a
 // test naming several packages the command file does not may alias the domain

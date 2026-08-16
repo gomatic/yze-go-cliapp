@@ -1,12 +1,12 @@
-// Package nested imports its domain group correctly AND a type package nested
-// beneath it. "domain" is a file-scoped name already bound by the group, so the
-// exemption APPLIES to the nested import and nothing is reported — asking for a
-// second "domain" in this file prescribes a redeclaration.
+// Package nested imports its own counterpart correctly AND a type package
+// nested beneath it. "domain" is a file-scoped name and the counterpart has it;
+// the type package is not the command's domain package and is not asked for a
+// name it could not take.
 package nested
 
 import (
-	domain "m/internal/domain/greet"
-	"m/internal/domain/greet/model"
+	domain "m/internal/domain/nested"
+	"m/internal/domain/nested/model"
 )
 
 const name = "nested"

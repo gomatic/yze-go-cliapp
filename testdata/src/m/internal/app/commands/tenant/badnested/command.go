@@ -3,7 +3,7 @@
 // depth-1 predicate never did.
 package badnested
 
-import greetdomain "m/internal/domain/greet" // want `import the domain package with the "domain" alias`
+import greetdomain "m/internal/domain/tenant/badnested" // want `import the domain package with the "domain" alias`
 
 var bad = greetdomain.Config{}.Name // want `the first declaration must be the const block`
 

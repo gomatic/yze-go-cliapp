@@ -1,6 +1,6 @@
 package multifile
 
-import domain "m/internal/domain/greet"
+import domain "m/internal/domain/multifile"
 
 const (
 	name  = "multifile"

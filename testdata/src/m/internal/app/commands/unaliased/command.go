@@ -3,9 +3,9 @@
 // nil.
 package unaliased
 
-import "m/internal/domain/greet" // want `import the domain package with the "domain" alias`
+import "m/internal/domain/unaliased" // want `import the domain package with the "domain" alias`
 
 const name = "unaliased"
 
 // Command is the entry point.
-func Command() greet.Config { return greet.Config{Name: name} }
+func Command() unaliased.Config { return unaliased.Config{Name: name} }

@@ -4,7 +4,7 @@
 // nothing is reported.
 package blank
 
-import _ "m/internal/domain/greet"
+import _ "m/internal/domain/blank"
 
 const name = "blank"
 

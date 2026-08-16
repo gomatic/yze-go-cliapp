@@ -4,9 +4,9 @@
 // substring rather than the suffix marks it self-declaring and reports both.
 package midname
 
-import wrong "m/internal/domain/greet"
+import wrong "m/internal/domain"
 
-var config = wrong.Config{Name: "midname"}
+var config = wrong.Argument("midname")
 
 // CommandLineFlags is an ordinary exported helper.
-func CommandLineFlags() string { return config.Name }
+func CommandLineFlags() string { return string(config) }

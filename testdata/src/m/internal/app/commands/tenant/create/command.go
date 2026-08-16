@@ -4,7 +4,7 @@
 // even looked at.
 package create
 
-import domain "m/internal/domain/greet"
+import domain "m/internal/domain/tenant/create"
 
 const name = "create"
 

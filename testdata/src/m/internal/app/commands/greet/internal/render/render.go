@@ -4,9 +4,9 @@
 // produce no diagnostics.
 package render
 
-import greetdomain "m/internal/domain/greet"
+import wrong "m/internal/domain"
 
 // Render deliberately violates every command-package rule (var-first file, no
 // Command entry point, a domain import not aliased "domain") — each would be
 // flagged if this nested package were misclassified as a command package.
-var Render = func(cfg greetdomain.Config) string { return cfg.Name }
+var Render = func(cfg wrong.Argument) string { return string(cfg) }

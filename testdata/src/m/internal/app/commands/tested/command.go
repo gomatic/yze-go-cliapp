@@ -1,6 +1,6 @@
 package tested
 
-import domain "m/internal/domain/greet"
+import domain "m/internal/domain/tested"
 
 const (
 	name  = "tested"

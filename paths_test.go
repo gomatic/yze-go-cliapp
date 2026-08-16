@@ -8,7 +8,6 @@ package cliapp
 
 import (
 	"go/ast"
-	"go/token"
 	"go/types"
 	"testing"
 
@@ -43,37 +42,6 @@ func TestIsCommandTreeMatchesAnyDepthBelowTheMarker(t *testing.T) {
 		{path: "", want: false, why: "an empty path"},
 	} {
 		assert.Equal(t, tc.want, isCommandTree(tc.path), "isCommandTree(%q): %s", tc.path, tc.why)
-	}
-}
-
-// TestDomainImportIsMatchedOnSegments names the boundary the alias rule turns
-// on. The doc comment says "the domain package" and names no discriminator, so
-// this is the one it means — and a substring test gets it wrong in both
-// directions at once. Requiring a trailing slash exempts a module whose whole
-// domain is one package at internal/domain, silently, from the only rule this
-// analyzer has for it; dropping it admits internal/domainhelpers, whose alias
-// nothing has any business prescribing. Neither mistake reports anything, so
-// neither shows up in a diff of findings.
-func TestDomainImportIsMatchedOnSegments(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		path importPath
-		why  string
-		want bool
-	}{
-		{path: "example.com/x/internal/domain", want: true, why: "the tier root is a real package in the reference layout"},
-		{path: "example.com/x/internal/domain/greet", want: true, why: "a domain group"},
-		{path: "example.com/x/internal/domain/config/get", want: true, why: "a nested domain group"},
-		{path: "example.com/x/internal/domain/greet/model", want: true, why: "a type package beneath a group is still in the tier"},
-
-		{path: "example.com/x/internal/domainhelpers", want: false, why: "a sibling whose name merely begins with the tier's"},
-		{path: "example.com/x/internal/domains", want: false, why: "the segment is 'domain', not a prefix of one"},
-		{path: "example.com/x/internal/app/commands/tenant", want: false, why: "the command tree is not the domain tier"},
-		{path: "example.com/x/domain", want: false, why: "a domain package outside any internal tier"},
-		{path: "", want: false, why: "an empty path"},
-	} {
-		assert.Equal(t, tc.want, isDomainImport(tc.path), "isDomainImport(%q): %s", tc.path, tc.why)
 	}
 }
 
@@ -135,35 +103,6 @@ func TestKeywordVerbsAreTheOnesNoPackageCanHave(t *testing.T) {
 		{verb: "", want: false, why: "no verb at all"},
 	} {
 		assert.Equal(t, tc.want, isKeywordVerb(tc.verb), "isKeywordVerb(%q): %s", tc.verb, tc.why)
-	}
-}
-
-// TestImportedPathReadsBothStringForms names what an import path IS. Go admits
-// the raw string form as readily as the interpreted one and the build treats
-// them identically, so trimming the double quote leaves a backquoted path
-// carrying its backquotes, outside every predicate here — a domain import
-// turned off by one keystroke. This is asserted against a constructed
-// ImportSpec rather than only through the rawstring fixture, because gofmt
-// rewrites a raw import path back to the interpreted form: the fixture's
-// discriminating property is one a routine format deletes, and a case with a
-// half-life is not a case.
-func TestImportedPathReadsBothStringForms(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		literal string
-		want    importPath
-		why     string
-	}{
-		{literal: `"m/internal/domain/greet"`, want: "m/internal/domain/greet", why: "the interpreted form"},
-		{literal: "`m/internal/domain/greet`", want: "m/internal/domain/greet", why: "the raw form the build accepts identically"},
-		{literal: "`m/internal/domain`", want: "m/internal/domain", why: "the raw form of the tier root, where trimming fails outright"},
-		{literal: `"m/internal/domain"`, want: "m/internal/domain", why: "the interpreted tier root"},
-		{literal: "m/unquoted", want: "", why: "a literal the go parser would have rejected first names no path"},
-	} {
-		spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: tc.literal}}
-
-		assert.Equal(t, tc.want, importedPath(spec), "importedPath(%s): %s", tc.literal, tc.why)
 	}
 }
 
