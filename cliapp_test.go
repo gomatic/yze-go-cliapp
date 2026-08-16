@@ -54,6 +54,7 @@ func TestCommandPackageStandards(t *testing.T) {
 		"m/internal/app/commands/rootbind",
 		"m/internal/app/commands/strayer",
 		"m/internal/app/commands/dotimport",
+		"m/internal/app/commands/dupimport",
 		"m/myinternal/app/commands/lookalike",
 	)
 }

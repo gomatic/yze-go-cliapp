@@ -35,8 +35,9 @@ const blankName = "_"
 // aliasing this one redeclares it, and the author's only remaining moves would
 // be a baseline or a //nolint.
 const (
-	messageAlias = "command package: import the domain package with the %q alias"
-	messageTaken = "command package: %q already binds %q here, so the domain package cannot take it — rename that import first"
+	messageAlias     = "command package: import the domain package with the %q alias"
+	messageTaken     = "command package: %q already binds %q here, so the domain package cannot take it — rename that import first"
+	messageDuplicate = "command package: the domain package is already imported as %q in this file — drop this second import and use it"
 )
 
 // domainPaths are the two import paths a command package may name as its own
@@ -158,16 +159,19 @@ func checkDomainAlias(pass *analysis.Pass) {
 // second report standing after the first was answered, and the second answer
 // does not exist.
 func checkFileDomainAliases(pass *analysis.Pass, file *ast.File, paths domainPaths) {
-	specs := entitledImports(file, paths)
-	named := firstNamedImport(specs)
-	if named == nil || anyBindsDomain(pass, specs) {
+	named := namedImports(entitledImports(file, paths))
+	if len(named) == 0 {
+		return
+	}
+	if bound := boundImport(pass, named); bound != nil {
+		reportDuplicates(pass, named, bound)
 		return
 	}
 	if holder := domainHolder(pass, file); holder != nil {
-		pass.Reportf(named.Pos(), messageTaken, importedPath(holder), domainAlias)
+		pass.Reportf(named[0].Pos(), messageTaken, importedPath(holder), domainAlias)
 		return
 	}
-	pass.Reportf(named.Pos(), messageAlias, domainAlias)
+	pass.Reportf(named[0].Pos(), messageAlias, domainAlias)
 }
 
 // entitledImports returns the specs naming the package's own domain package:
@@ -195,30 +199,45 @@ func importsOf(file *ast.File, path importPath) []*ast.ImportSpec {
 	return found
 }
 
-// firstNamedImport returns the first spec that binds an identifier, or nil when
-// every spec is blank — the shape a command mounting registration side effects
-// writes, and the one where the remedy has nothing to rename.
-func firstNamedImport(specs []*ast.ImportSpec) *ast.ImportSpec {
+// namedImports drops the specs that bind no identifier. A blank import has no
+// name in it to spell the alias with, and a file whose every spec is blank —
+// the shape a command mounting registration side effects writes — is asked for
+// nothing.
+func namedImports(specs []*ast.ImportSpec) []*ast.ImportSpec {
+	var found []*ast.ImportSpec
 	for _, imp := range specs {
 		if !isBlankImport(imp) {
+			found = append(found, imp)
+		}
+	}
+	return found
+}
+
+// boundImport returns the spec that binds the standard's name, searching every
+// spec of the path rather than the first: Go permits the same path twice under
+// two names, and the order of an import block is gofmt's rather than the
+// author's.
+func boundImport(pass *analysis.Pass, specs []*ast.ImportSpec) *ast.ImportSpec {
+	for _, imp := range specs {
+		if bindsDomain(pass, imp) {
 			return imp
 		}
 	}
 	return nil
 }
 
-// anyBindsDomain reports whether the domain package is bound to the standard's
-// name anywhere in the file. One binding satisfies the rule's reason — the call
-// sites reading domain.X have it — so a redundant second import of the same
-// path under another name is a wart for some other rule, not an alias
-// violation, and reporting it would prescribe a redeclaration.
-func anyBindsDomain(pass *analysis.Pass, specs []*ast.ImportSpec) bool {
-	for _, imp := range specs {
-		if bindsDomain(pass, imp) {
-			return true
+// reportDuplicates reports every OTHER spec of the domain package's path once
+// one of them binds the name. Without this, two lines buy silence: import your
+// own domain package a second time as "domain", use it once, and every call
+// site may keep reading greetdomain. The name is bound, so the alias remedy
+// would redeclare it — the takeable edit is to drop the second import, and the
+// message says so rather than prescribing source that does not build.
+func reportDuplicates(pass *analysis.Pass, named []*ast.ImportSpec, bound *ast.ImportSpec) {
+	for _, imp := range named {
+		if imp != bound {
+			pass.Reportf(imp.Pos(), messageDuplicate, domainAlias)
 		}
 	}
-	return false
 }
 
 // domainHolder returns the import already binding "domain" in this file, if

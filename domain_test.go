@@ -168,20 +168,24 @@ func TestMessageAliasAndMessageTakenEachNameAnEditThatCompiles(t *testing.T) {
 			`so the domain package cannot take it — rename that import first`,
 		fmt.Sprintf(messageTaken, importPath("m/internal/domain"), domainAlias),
 		"the taken-name message names the holder, which is the import the author must edit")
+
+	assert.Equal(t,
+		`command package: the domain package is already imported as "domain" `+
+			`in this file — drop this second import and use it`,
+		fmt.Sprintf(messageDuplicate, domainAlias),
+		"the duplicate message names a deletion, because aliasing a second spec of the same path redeclares the name")
 }
 
-// TestAnyBindsDomainReadsEverySpecOfThePath names why the search is over every
+// TestBoundImportReadsEverySpecOfThePath names why the search is over every
 // spec of the domain package's path and not over the first. Go permits the same
-// path twice under two names, and where one of them IS "domain" the rule's
-// reason holds: the domain package is bound to the name. Reporting the other
-// spec would prescribe `domain redeclared in this block`, and the only edit
-// that answers it is a deletion no message here names.
+// path twice under two names, so which spec binds "domain" decides both whether
+// the alias rule is satisfied and which of the others is the duplicate to drop.
 //
 // It is asserted against constructed specs rather than through a fixture
 // because gofmt SORTS an import block, so a fixture cannot hold the
 // domain-binding spec second — the discriminating property has a half-life of
 // one format run, and a case with a half-life is not a case.
-func TestAnyBindsDomainReadsEverySpecOfThePath(t *testing.T) {
+func TestBoundImportReadsEverySpecOfThePath(t *testing.T) {
 	t.Parallel()
 
 	pass := &analysis.Pass{Pkg: types.NewPackage("m/internal/app/commands/greet", "greet")}
@@ -191,18 +195,19 @@ func TestAnyBindsDomainReadsEverySpecOfThePath(t *testing.T) {
 			Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("m/internal/domain/greet")},
 		}
 	}
+	sole, first, second, wrong := spec(domainAlias), spec(domainAlias), spec(domainAlias), spec("greetdomain")
 
 	for _, tc := range []struct {
+		want  *ast.ImportSpec
 		why   string
 		specs []*ast.ImportSpec
-		want  bool
 	}{
-		{specs: []*ast.ImportSpec{spec(domainAlias)}, want: true, why: "the only spec binds the name"},
-		{specs: []*ast.ImportSpec{spec(domainAlias), spec("greetdomain")}, want: true, why: "the binding spec is first"},
-		{specs: []*ast.ImportSpec{spec("greetdomain"), spec(domainAlias)}, want: true, why: "and the name is still bound when it is second"},
-		{specs: []*ast.ImportSpec{spec("greetdomain")}, want: false, why: "no spec binds it"},
-		{specs: nil, want: false, why: "the path is not imported at all"},
+		{specs: []*ast.ImportSpec{sole}, want: sole, why: "the only spec binds the name"},
+		{specs: []*ast.ImportSpec{first, wrong}, want: first, why: "the binding spec is first"},
+		{specs: []*ast.ImportSpec{wrong, second}, want: second, why: "and it is still found when gofmt puts it second"},
+		{specs: []*ast.ImportSpec{wrong}, want: nil, why: "no spec binds it"},
+		{specs: nil, want: nil, why: "the path is not imported at all"},
 	} {
-		assert.Equal(t, tc.want, anyBindsDomain(pass, tc.specs), "anyBindsDomain: %s", tc.why)
+		assert.Same(t, tc.want, boundImport(pass, tc.specs), "boundImport: %s", tc.why)
 	}
 }
