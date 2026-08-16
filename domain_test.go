@@ -48,6 +48,15 @@ func TestDomainPathsOfDerivesBothCandidatesFromTheCommandsOwnPath(t *testing.T) 
 			pkg: "m/internal/app/commands/greet/internal/render", counterpart: "m/internal/domain/greet/internal/render", tierRoot: "m/internal/domain",
 			why: "a helper beneath a command derives paths it never imports; the declaration gate is what exempts it, not this",
 		},
+		{
+			pkg:         "m/internal/app/commands/greet/internal/app/commands/inner",
+			counterpart: "m/internal/domain/greet/internal/app/commands/inner",
+			tierRoot:    "m/internal/domain",
+			why: "the FIRST marker decides, not the last: the tier root has to be the module's shared vocabulary package, " +
+				"which is what yze/clidomain resolves domain.Argument against (its sharedVocabulary cuts at the first " +
+				"occurrence too, spelling.go:98) — two analyzers disagreeing about where the tier is, is how a file-scoped " +
+				"name ends up demanded twice",
+		},
 	} {
 		paths := domainPathsOf(tc.pkg)
 
