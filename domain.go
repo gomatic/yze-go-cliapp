@@ -40,37 +40,37 @@ const (
 	messageDuplicate = "command package: the domain package is already imported as %q in this file — drop this second import and use it"
 )
 
-// domainPaths are the two import paths a command package may name as its own
-// domain package, both derived from the ANALYZED package's path — which is what
-// the build compiled it as, and which no judged file can rewrite.
-//
-// The counterpart is the domain package that corresponds to this command,
+// counterpartOf derives the import path of a command package's OWN domain
+// package from the ANALYZED package's path — which is what the build compiled
+// it as, and which no judged file can rewrite. The counterpart corresponds
 // segment for segment: internal/app/commands/tenant/create is backed by
-// internal/domain/tenant/create. The tier root is the fallback, and it is only
-// the domain package of a module laying its whole domain out as one package at
-// internal/domain — which the reference layout permits and which a file
-// importing no counterpart is presumed to be.
-type domainPaths struct {
-	counterpart importPath
-	tierRoot    importPath
-}
-
-// domainPathsOf derives the two candidate paths from a command package's own
-// path. It is only called after isCommandTree, so the marker is present and the
-// remainder names a command.
+// internal/domain/tenant/create. It is only called after isCommandTree, so the
+// marker is present and the remainder names a command.
 //
-// Deriving them by exact path — rather than matching every import at or beneath
-// the tier — is what bounds the rule to one import per file. It also retires a
+// The FIRST marker decides, because the tier a path belongs to has to be the
+// one yze/clidomain resolves the shared vocabulary against, and its
+// sharedVocabulary cuts at the first occurrence too (yze-go-clidomain
+// spelling.go:98). Two analyzers disagreeing about where the tier is, is how a
+// file-scoped name ends up demanded twice.
+//
+// Deriving one exact path — rather than matching every import at or beneath the
+// tier — is what bounds the rule to one import per file. It also retires a
 // whole class of boundary mistake for free: internal/domainhelpers and
-// internal/domains cannot equal either path, so no segment-matching predicate
-// is needed to keep them out, and there is no substring test left to get wrong
-// in either direction.
-func domainPathsOf(pkgPath importPath) domainPaths {
+// internal/domains cannot equal it, so no segment-matching predicate is needed
+// to keep them out, and there is no substring test left to get wrong in either
+// direction.
+//
+// Nothing stands in for a counterpart that is not imported. The shared
+// vocabulary package at the tier root is the obvious candidate and is wrong:
+// it is every tier's vocabulary and nobody's counterpart, so a mount-only
+// parent command naming domain.Argument, or the SECOND FILE of a command
+// package whose counterpart is imported in the first, would both be told to
+// give it the name — and taking that instruction makes "domain" mean two
+// different packages inside one package, which is the collision this rule was
+// rewritten to stop prescribing.
+func counterpartOf(pkgPath importPath) importPath {
 	namespace, command, _ := strings.Cut(string(pkgPath), commandsMarker)
-	return domainPaths{
-		counterpart: importPath(namespace + domainMarker + "/" + command),
-		tierRoot:    importPath(namespace + domainMarker),
-	}
+	return importPath(namespace + domainMarker + "/" + command)
 }
 
 // importedPath is the path an import spec names. ImportSpec.Path is a quoted
@@ -134,16 +134,14 @@ func isBlankImport(imp *ast.ImportSpec) bool {
 // entry-point scan, which is misclassification; the two skips share the
 // isTestFile filter and nothing else.
 func checkDomainAlias(pass *analysis.Pass) {
-	paths := domainPathsOf(importPath(pass.Pkg.Path()))
+	counterpart := counterpartOf(importPath(pass.Pkg.Path()))
 	for _, file := range productionFiles(pass) {
-		checkFileDomainAliases(pass, file, paths)
+		checkFileDomainAliases(pass, file, counterpart)
 	}
 }
 
 // checkFileDomainAliases judges the ONE import a file can be asked to bind
-// "domain" to: the package's own domain counterpart, or — when the file names
-// no counterpart — the tier root, which is the whole domain of a module that
-// has only one.
+// "domain" to: the package's own domain counterpart, and nothing else ever.
 //
 // Every other import at or beneath the tier is out of the rule's reach, and
 // that is the point rather than a concession. A command file legitimately names
@@ -158,8 +156,8 @@ func checkDomainAlias(pass *analysis.Pass) {
 // remedy ends the finding: reporting every spec of the path would leave a
 // second report standing after the first was answered, and the second answer
 // does not exist.
-func checkFileDomainAliases(pass *analysis.Pass, file *ast.File, paths domainPaths) {
-	named := namedImports(entitledImports(file, paths))
+func checkFileDomainAliases(pass *analysis.Pass, file *ast.File, counterpart importPath) {
+	named := namedImports(importsOf(file, counterpart))
 	if len(named) == 0 {
 		return
 	}
@@ -172,19 +170,6 @@ func checkFileDomainAliases(pass *analysis.Pass, file *ast.File, paths domainPat
 		return
 	}
 	pass.Reportf(named[0].Pos(), messageAlias, domainAlias)
-}
-
-// entitledImports returns the specs naming the package's own domain package:
-// its counterpart where the file imports it, and the tier root only where it
-// does not. The counterpart wins because it is the package the standard names;
-// the root is the domain package of a flat module and nobody's counterpart in a
-// grouped one, so letting it stand in while a counterpart is present would sell
-// silence for one import line.
-func entitledImports(file *ast.File, paths domainPaths) []*ast.ImportSpec {
-	if specs := importsOf(file, paths.counterpart); len(specs) > 0 {
-		return specs
-	}
-	return importsOf(file, paths.tierRoot)
 }
 
 // importsOf collects the specs in a file naming one exact import path. Go

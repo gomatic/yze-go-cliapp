@@ -17,62 +17,62 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// TestDomainPathsOfDerivesBothCandidatesFromTheCommandsOwnPath names the scope decision the
-// whole domain rule turns on. "domain" is a file-scoped name and a file has
-// exactly one, so at most one import per file can be asked for it; which one is
-// decided HERE, from the analyzed package's own import path, which is what the
-// build compiled it as and which no judged file can rewrite.
+// TestCounterpartOfDerivesTheDomainPackageFromTheCommandsOwnPath names the
+// scope decision the whole domain rule turns on. "domain" is a file-scoped name
+// and a file has exactly one, so at most one import per file can be asked for
+// it; which one is decided HERE, from the analyzed package's own import path,
+// which is what the build compiled it as and which no judged file can rewrite.
 //
 // Deriving the counterpart segment for segment is also what retires the
 // substring-versus-segment boundary the old scope predicate had to defend in
 // both directions at once: internal/domainhelpers and internal/domains cannot
-// equal either derived path, so there is no match left to widen.
-func TestDomainPathsOfDerivesBothCandidatesFromTheCommandsOwnPath(t *testing.T) {
+// equal it, so there is no match left to widen.
+func TestCounterpartOfDerivesTheDomainPackageFromTheCommandsOwnPath(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		pkg         importPath
-		counterpart importPath
-		tierRoot    importPath
-		why         string
+		pkg  importPath
+		want importPath
+		why  string
 	}{
 		{
-			pkg: "m/internal/app/commands/greet", counterpart: "m/internal/domain/greet", tierRoot: "m/internal/domain",
-			why: "a top-level command is backed by the domain package of the same name",
+			pkg:  "m/internal/app/commands/greet",
+			want: "m/internal/domain/greet",
+			why:  "a top-level command is backed by the domain package of the same name",
 		},
 		{
-			pkg: "example.com/x/internal/app/commands/tenant/create", counterpart: "example.com/x/internal/domain/tenant/create", tierRoot: "example.com/x/internal/domain",
-			why: "a nested command is backed segment for segment, at the same depth",
+			pkg:  "example.com/x/internal/app/commands/tenant/create",
+			want: "example.com/x/internal/domain/tenant/create",
+			why:  "a nested command is backed segment for segment, at the same depth",
 		},
 		{
-			pkg: "m/internal/app/commands/greet/internal/render", counterpart: "m/internal/domain/greet/internal/render", tierRoot: "m/internal/domain",
-			why: "a helper beneath a command derives paths it never imports; the declaration gate is what exempts it, not this",
+			pkg:  "m/internal/app/commands/greet/internal/render",
+			want: "m/internal/domain/greet/internal/render",
+			why:  "a helper beneath a command derives a path it never imports; the declaration gate is what exempts it, not this",
 		},
 		{
-			pkg:         "m/internal/app/commands/greet/internal/app/commands/inner",
-			counterpart: "m/internal/domain/greet/internal/app/commands/inner",
-			tierRoot:    "m/internal/domain",
-			why: "the FIRST marker decides, not the last: the tier root has to be the module's shared vocabulary package, " +
-				"which is what yze/clidomain resolves domain.Argument against (its sharedVocabulary cuts at the first " +
-				"occurrence too, spelling.go:98) — two analyzers disagreeing about where the tier is, is how a file-scoped " +
-				"name ends up demanded twice",
+			pkg:  "m/internal/app/commands/greet/internal/app/commands/inner",
+			want: "m/internal/domain/greet/internal/app/commands/inner",
+			why: "the FIRST marker decides, not the last: the tier a path belongs to has to be the one yze/clidomain " +
+				"resolves the shared vocabulary against, and its sharedVocabulary cuts at the first occurrence too " +
+				"(spelling.go:98) — two analyzers disagreeing about where the tier is, is how a file-scoped name ends " +
+				"up demanded twice",
 		},
 	} {
-		paths := domainPathsOf(tc.pkg)
+		got := counterpartOf(tc.pkg)
 
-		assert.Equal(t, tc.counterpart, paths.counterpart, "counterpart of %q: %s", tc.pkg, tc.why)
-		assert.Equal(t, tc.tierRoot, paths.tierRoot, "tier root of %q: %s", tc.pkg, tc.why)
+		assert.Equal(t, tc.want, got, "counterpartOf(%q): %s", tc.pkg, tc.why)
 		assert.NotEqual(
 			t,
-			importPath(string(tc.tierRoot)+"helpers"),
-			paths.counterpart,
+			importPath("m/internal/domainhelpers"),
+			got,
 			"a sibling of the tier is never the counterpart",
 		)
 		assert.NotEqual(
 			t,
-			importPath(string(tc.tierRoot)+"helpers"),
-			paths.tierRoot,
-			"a sibling of the tier is never the tier root",
+			importPath("m/internal/domain"),
+			got,
+			"the shared vocabulary package is nobody's counterpart",
 		)
 	}
 }

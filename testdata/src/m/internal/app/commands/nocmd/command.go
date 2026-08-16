@@ -5,8 +5,8 @@
 // stickler/clilayout's to report.
 package nocmd
 
-import wrong "m/internal/domain"
+import wrong "m/internal/domain/nocmd"
 
 const x = 1
 
-var _ = wrong.Argument("")
+var _ = wrong.Config{}

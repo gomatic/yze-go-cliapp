@@ -7,9 +7,9 @@
 // package out of scope entirely and silences both.
 package params
 
-import wrong "m/internal/domain" // want `import the domain package with the "domain" alias`
+import wrong "m/internal/domain/params" // want `import the domain package with the "domain" alias`
 
-var defaults = wrong.Argument("params") // want `the first declaration must be the const block`
+var defaults = wrong.Config{Name: "params"} // want `the first declaration must be the const block`
 
 // Command is the entry point, and it takes its collaborators as parameters.
-func Command(cfg wrong.Argument) string { return string(cfg) + string(defaults) }
+func Command(cfg wrong.Config) string { return cfg.Name + defaults.Name }

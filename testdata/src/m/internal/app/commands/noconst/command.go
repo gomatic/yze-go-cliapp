@@ -1,7 +1,7 @@
 package noconst
 
-import domain "m/internal/domain"
+import domain "m/internal/domain/noconst"
 
-var cfg domain.Argument // want `const block`
+var cfg domain.Config // want `const block`
 
-func Command() domain.Argument { return cfg }
+func Command() domain.Config { return cfg }

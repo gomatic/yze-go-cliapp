@@ -8,7 +8,7 @@ package squatter
 import (
 	domain "strings"
 
-	wrong "m/internal/domain/squatter" // want `already binds "domain"`
+	wrong "m/internal/domain/squatter" // want `"strings" already binds "domain"`
 )
 
 const name = "squatter"

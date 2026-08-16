@@ -11,7 +11,7 @@ package rootsquat
 import (
 	"m/internal/domain"
 
-	wrong "m/internal/domain/rootsquat" // want `already binds "domain"`
+	wrong "m/internal/domain/rootsquat" // want `"m/internal/domain" already binds "domain"`
 )
 
 const name = "rootsquat"

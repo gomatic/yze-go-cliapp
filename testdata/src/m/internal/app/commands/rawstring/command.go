@@ -5,9 +5,9 @@
 // a domain import turned off by one keystroke. It is reported.
 package rawstring
 
-import wrong `m/internal/domain` // want `import the domain package with the "domain" alias`
+import wrong `m/internal/domain/rawstring` // want `import the domain package with the "domain" alias`
 
 const name = "rawstring"
 
 // Command is the entry point.
-func Command() wrong.Argument { return name }
+func Command() wrong.Config { return wrong.Config{Name: name} }

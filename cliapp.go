@@ -10,13 +10,20 @@
 //
 // The package's own domain package is its COUNTERPART, the domain package
 // corresponding segment for segment: internal/app/commands/tenant/create is
-// backed by internal/domain/tenant/create. Where a file imports no counterpart,
-// the tier root internal/domain takes its place, which is the whole domain of a
-// module laying it out as a single package. No other import is judged: "domain"
-// is a file-scoped name and a file has exactly one, so a rule reaching a second
+// backed by internal/domain/tenant/create. No other import is ever judged, and
+// nothing stands in for a counterpart a file does not import. "domain" is a
+// file-scoped name and a file has exactly one, so a rule reaching a second
 // import at or beneath the tier would prescribe a redeclaration — and a command
 // file legitimately names the shared vocabulary package beside its counterpart,
 // or a type package nested under its own group.
+//
+// The shared vocabulary package at internal/domain is the obvious stand-in and
+// is the wrong one. It is every tier's vocabulary and nobody's counterpart, so
+// standing it in would report a mount-only parent command that names
+// domain.Argument, and the SECOND FILE of a command package whose counterpart
+// is imported in the first — and taking that instruction makes "domain" mean
+// two different packages inside one package, which is the collision this rule
+// exists not to prescribe.
 //
 // The name is what the import BINDS, not what it spells: an import with no
 // alias binds the imported package's own name, so an unaliased import of a
@@ -26,14 +33,22 @@
 // instead of prescribing a redeclaration — the domain package cannot take a
 // name that is spoken for, and the remedy is to rename the holder first.
 //
-// What that leaves reachable is stated rather than claimed away: a command
-// package that imports NEITHER its counterpart NOR the tier root is judged by
-// nothing here, so moving a command's logic to a domain package that is not its
-// counterpart escapes the rule. It is not a marker anyone can forge — the
-// candidate paths come from the analyzed package's own import path, which no
-// judged file can rewrite — and the escape costs relocating a package, against
-// an alias that costs one word. Whether such a command exists at all is
-// cross-package correspondence, which is stickler/clilayout's.
+// What that leaves reachable is stated rather than claimed away, and it is not
+// forgeable: the counterpart path comes from the analyzed package's own import
+// path, which no judged file can rewrite, so silence has to be bought by not
+// importing the counterpart at all. Two ways exist and NEITHER is free.
+//
+// Move the command's logic to a domain package that is not its counterpart: the
+// import is then out of this rule, and stickler/clilayout reports the
+// correspondence — "domain verb X has no command package Y", or the converse.
+// Or stop declaring an entry point, which takes the package out of every check
+// here for one identifier; that is the cheapest move in reach, and it is also
+// the one clilayout is watching. Measured 2026-08-16: renaming Command to New
+// in a conforming module takes yze/cliapp to silence and draws
+// "domain verb internal/domain/greet has no command package
+// internal/app/commands/greet declaring a Command entry point" from
+// stickler/clilayout, which is why this analyzer does not restate
+// correspondence and must not be read as the whole gate for it.
 //
 // Test files are judged by none of this. They carry no command source, and a
 // test naming several packages the command file does not may alias the domain

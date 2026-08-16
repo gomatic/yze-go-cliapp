@@ -5,11 +5,11 @@
 // package self-declaring and reports both.
 package method
 
-import wrong "m/internal/domain"
+import wrong "m/internal/domain/method"
 
 type builder struct{}
 
-var config = wrong.Argument("method")
+var config = wrong.Config{Name: "method"}
 
 // Command is a method, not a package entry point.
-func (builder) Command() string { return string(config) }
+func (builder) Command() string { return config.Name }
