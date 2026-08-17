@@ -7,4 +7,4 @@
 
 //go:build library_marker
 
-package cliapp_test
+package cliapp
